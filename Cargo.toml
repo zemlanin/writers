@@ -1,0 +1,5 @@
+[package]
+
+name = "writers"
+version = "0.0.1"
+authors = ["Anton Verinov <git@zemlan.in>"]
