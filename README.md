@@ -1,2 +1,2 @@
 # writers
-Static site generator on Rust
+Static site generator in Rust
