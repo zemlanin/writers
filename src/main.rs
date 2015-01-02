@@ -1,15 +1,23 @@
+extern crate mustache;
+extern crate markdown;
+extern crate "rustc-serialize" as rustc_serialize;
+
+use std::io;
 use std::io::{fs, USER_DIR};
+
+#[deriving(RustcEncodable)]
+struct PostData {
+    content: String,
+}
 
 fn main() {
     let (input_path, output_path) = match lib::shell_args() {
         Ok((path_1, path_2)) => (path_1, path_2),
-        _ => {
-            println!("Error while parsing opts");
+        Err(msg) => {
+            println!("Error while parsing opts: {}", msg);
             return
         }
     };
-
-    println!("{} {}", input_path.display(), output_path.display());
 
     let contents = match fs::readdir(&input_path) {
         Ok(result) => result,
@@ -19,7 +27,7 @@ fn main() {
         }
     };
 
-    match fs::mkdir_recursive(&output_path, USER_DIR) {
+    match fs::mkdir_recursive(&output_path, io::USER_DIR) {
         Err(msg) => {
             println!("{}", msg);
             return
@@ -27,12 +35,51 @@ fn main() {
         _ => {}
     };
 
-    for absolute_path in contents.iter() {
-        println!("{}", absolute_path.display());
+    let mut template: Option<mustache::Template> = None;
+    let file_ext_closure = |ext, p: &Path| p.as_str().unwrap().ends_with(ext);
 
-        if absolute_path.display().to_string().ends_with("html") {
-            println!("tmpl!");
+    for absolute_path in contents.iter().filter(|&p| file_ext_closure("mustache", p)) {
+        if template.is_none() {
+            template = match mustache::compile_path(absolute_path.clone()) {
+                Ok(result) => Some(result),
+                Err(msg) => {
+                    println!("{}", msg); None
+                }
+            };
         };
+    }
+
+    if template.is_none() {
+        println!("No base mustache in input folder");
+        return
+    }
+
+    for absolute_path in contents.iter().filter(|&p| file_ext_closure("md", p)) {
+        println!("{}", absolute_path.display());
+        let mut markdown_file = match io::File::open(absolute_path) {
+            Ok(result) => result,
+            Err(msg) => {
+                println!("{}", msg);
+                return
+            }
+        };
+
+        let markdown_string = match markdown_file.read_to_string() {
+            Ok(result) => markdown::to_html(result.as_slice()),
+            Err(msg) => {
+                println!("{}", msg);
+                return
+            }
+        };
+
+        let post = PostData {
+            content: markdown_string
+        };
+
+        println!("{}", post.content);
+
+        // rust-mustache still depends on deprecated Encodable
+        // let rendered_mustache = template.unwrap().render(&mut io::stdout(), &vec!(post));
     }
 }
 
@@ -45,7 +92,7 @@ mod lib {
         os::make_absolute(&if args.len() > position {
             Path::new(&args[position])
         } else {
-            Path::new(default_value) // because of sublime text's cargo build
+            Path::new(default_value)
         })
     }
 
