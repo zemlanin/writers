@@ -1,82 +1,100 @@
+#![feature(macro_rules)]
+
 extern crate mustache;
 extern crate markdown;
 extern crate "rustc-serialize" as rustc_serialize;
 
 use std::io;
 use std::io::{fs, USER_DIR};
+use std::io::fs::{PathExtensions};
 
 #[deriving(RustcEncodable)]
 struct PostData {
     content: String,
 }
 
+macro_rules! try_print(
+    ($expr:expr) => ({
+        match $expr {
+            Ok(val) => val,
+            Err(err) => {
+                println!("{}", err);
+                return
+            }
+        }
+    })
+);
+
+macro_rules! try_option(
+    ($expr:expr) => ({
+        match $expr {
+            Ok(val) => Some(val),
+            Err(err) => {
+                println!("{}", err);
+                None
+            }
+        }
+    })
+);
+
 fn main() {
-    let (input_path, output_path) = match lib::shell_args() {
-        Ok((path_1, path_2)) => (path_1, path_2),
-        Err(msg) => {
-            println!("Error while parsing opts: {}", msg);
-            return
-        }
-    };
-
-    let contents = match fs::readdir(&input_path) {
-        Ok(result) => result,
-        Err(_) => {
-            println!("Enter input directory as a first argument");
-            return
-        }
-    };
-
-    match fs::mkdir_recursive(&output_path, io::USER_DIR) {
-        Err(msg) => {
-            println!("{}", msg);
-            return
-        },
-        _ => {}
-    };
-
+    let (input_path, output_path) = try_print!(lib::shell_args());
+    let contents = try_print!(fs::readdir(&input_path));
+    let mut file_paths = Vec::new();
+    let mut dir_paths = Vec::new();
     let mut template: Option<mustache::Template> = None;
-    let file_ext_closure = |ext, p: &Path| p.as_str().unwrap().ends_with(ext);
 
-    for absolute_path in contents.iter().filter(|&p| file_ext_closure("mustache", p)) {
+    // TODO: pass base template as an argument
+    for absolute_path in contents.iter().filter(|p| p.extension_str() == Some("mustache")) {
         if template.is_none() {
-            template = match mustache::compile_path(absolute_path.clone()) {
-                Ok(result) => Some(result),
-                Err(msg) => {
-                    println!("{}", msg); None
-                }
-            };
+            template = try_option!(mustache::compile_path(absolute_path.clone()));
+        } else {
+            break;
         };
     }
 
     if template.is_none() {
-        println!("No base mustache in input folder");
+        println!("No base mustache template in input folder");
         return
     }
 
-    for absolute_path in contents.iter().filter(|&p| file_ext_closure("md", p)) {
-        println!("{}", absolute_path.display());
-        let mut markdown_file = match io::File::open(absolute_path) {
-            Ok(result) => result,
-            Err(msg) => {
-                println!("{}", msg);
-                return
-            }
+    try_print!(fs::mkdir_recursive(&output_path, io::USER_DIR));
+    for absolute_path in contents.into_iter() {
+        if absolute_path.is_dir() {
+            dir_paths.push(absolute_path.clone());
+        } else {
+            file_paths.push(absolute_path.clone());
+        };
+    };
+
+    loop {
+        let directory = match dir_paths.pop() {
+            Some(val) => val,
+            None => break,
         };
 
-        let markdown_string = match markdown_file.read_to_string() {
-            Ok(result) => markdown::to_html(result.as_slice()),
-            Err(msg) => {
-                println!("{}", msg);
-                return
-            }
+        for absolute_path in try_print!(fs::readdir(&directory)).into_iter() {
+            if absolute_path.is_dir() {
+                dir_paths.push(absolute_path.clone());
+            } else {
+                file_paths.push(absolute_path.clone());
+            };
         };
+    }
+
+    for absolute_path in file_paths.iter().filter(|p| p.extension_str() == Some("md")) {
+        let mut markdown_file = try_print!(io::File::open(absolute_path));
+        let markdown_string = try_print!(markdown_file.read_to_string());
 
         let post = PostData {
-            content: markdown_string
+            content: markdown::to_html(markdown_string.as_slice())
         };
 
         println!("{}", post.content);
+        let relative_path_md = absolute_path.path_relative_from(&input_path).unwrap();
+        let mut relative_path_html = output_path.clone();
+        relative_path_html.push(relative_path_md.with_extension("html").as_str().unwrap());
+        println!("{} => {}", relative_path_md.display(), relative_path_html.display());
 
         // rust-mustache still depends on deprecated Encodable
         // let rendered_mustache = template.unwrap().render(&mut io::stdout(), &vec!(post));
@@ -87,7 +105,7 @@ mod lib {
     use std::os;
     use std::io;
 
-    fn parse_path_opt(position: uint, default_value: String) -> io::IoResult<Path> {
+    fn parse_path_opt(position: uint, default_value: &str) -> io::IoResult<Path> {
         let args = os::args();
         os::make_absolute(&if args.len() > position {
             Path::new(&args[position])
@@ -97,8 +115,8 @@ mod lib {
     }
 
     pub fn shell_args() -> io::IoResult<(Path, Path)> {
-        let input_arg = parse_path_opt(1, "../input/".to_string());
-        let output_arg = parse_path_opt(2, "../output/".to_string());
+        let input_arg = parse_path_opt(1, "../input/");
+        let output_arg = parse_path_opt(2, "../output/");
 
         match (input_arg, output_arg) {
             (Ok(input_path), Ok(output_path)) => Ok((input_path, output_path)),
