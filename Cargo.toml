@@ -6,10 +6,10 @@ authors = ["Anton Verinov <git@zemlan.in>"]
 
 [dependencies.mustache]
 git = "https://github.com/evant/rust-mustache"
-rev = "1aa396e76b8ed54361f1d881dcce0ee82aee3c4d"
+rev = "c4ace3b08e5dbb9642a90043cb5c9faef0d1ea57"
 
 [dependencies.markdown]
 git = "https://github.com/johannhof/markdown.rs.git"
 
 [dependencies]
-rustc-serialize = "0.2.0"
+rustc-serialize = "0.2"

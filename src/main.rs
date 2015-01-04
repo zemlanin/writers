@@ -1,21 +1,20 @@
 #![feature(macro_rules)]
+#![feature(old_orphan_check)]
 
 extern crate mustache;
 extern crate markdown;
-// rust-mustache still depends on deprecated builtin serialize
-// extern crate "rustc-serialize" as rustc_serialize;
-extern crate serialize;
+extern crate "rustc-serialize" as rustc_serialize;
 
 use std::io;
-use std::io::{fs, USER_DIR};
-use std::io::fs::{PathExtensions};
+use std::io::fs;
+use std::io::fs::PathExtensions;
 
-#[deriving(Encodable)]
+#[derive(RustcEncodable)]
 struct PostData {
     content: String,
 }
 
-#[deriving(Encodable)]
+#[derive(RustcEncodable)]
 struct PageData {
     posts: Vec<PostData>,
 }
@@ -68,13 +67,9 @@ fn main() {
         Some(val) => val
     };
 
-    //try_print!(fs::mkdir_recursive(&output_path, io::USER_DIR));
     for absolute_path in contents.into_iter() {
         if absolute_path.is_dir() {
-            let relative_path = absolute_path.path_relative_from(&input_path).unwrap();
-            let mut new_dir = output_path.clone();
-            new_dir.push(relative_path.as_str().unwrap());
-            try_print!(fs::mkdir_recursive(&new_dir, io::USER_DIR));
+            try_print!(lib::output_mkdir(&absolute_path, &input_path, &output_path));
             dir_paths.push(absolute_path.clone());
         } else {
             file_paths.push(absolute_path.clone());
@@ -89,7 +84,7 @@ fn main() {
 
         for absolute_path in try_print!(fs::readdir(&directory)).into_iter() {
             if absolute_path.is_dir() {
-                try_print!(fs::mkdir_recursive(&absolute_path, io::USER_DIR));
+                try_print!(lib::output_mkdir(&absolute_path, &input_path, &output_path));
                 dir_paths.push(absolute_path.clone());
             } else {
                 file_paths.push(absolute_path.clone());
@@ -139,11 +134,15 @@ mod lib {
         }
     }
 
-    // TODO
-    // pub fn get_relative_path<'target>(base: &Path, target: &Path) -> Option<&'target str> {
-    //     match target.path_relative_from(base) {
-    //         Some(res) => res.as_str(),
-    //         None => None
-    //     }
-    // }
+    fn get_output_target(input_target: &Path, input_path: &Path, output_path: &Path) -> Path {
+        let relative_path = input_target.path_relative_from(input_path).unwrap();
+        let mut output_target = output_path.clone();
+        output_target.push(relative_path.as_str().unwrap());
+        output_target
+    }
+
+    pub fn output_mkdir(input_target: &Path, input_path: &Path, output_path: &Path) -> io::IoResult<()> {
+        let output_target = get_output_target(input_target, input_path, output_path);
+        io::fs::mkdir_recursive(&output_target, io::USER_DIR)
+    }
 }
