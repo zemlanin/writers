@@ -4,12 +4,11 @@ name = "writers"
 version = "0.0.1"
 authors = ["Anton Verinov <git@zemlan.in>"]
 
-[dependencies.mustache]
-git = "https://github.com/evant/rust-mustache"
-rev = "c4ace3b08e5dbb9642a90043cb5c9faef0d1ea57"
+[dependencies.rust-mustache]
+git = "https://github.com/nickel-org/rust-mustache"
 
 [dependencies.markdown]
 git = "https://github.com/johannhof/markdown.rs.git"
 
 [dependencies]
-rustc-serialize = "0.2"
+rustc-serialize = "0.2.12"

@@ -1,13 +1,15 @@
 #![feature(macro_rules)]
-#![feature(old_orphan_check)]
 
 extern crate mustache;
 extern crate markdown;
 extern crate "rustc-serialize" as rustc_serialize;
 
 use std::io;
-use std::io::fs;
-use std::io::fs::PathExtensions;
+use std::fs;
+use std::fs::PathExt;
+
+use std::io::Read;
+use std::ffi::{OsStr};
 
 #[derive(RustcEncodable)]
 struct PostData {
@@ -45,15 +47,23 @@ macro_rules! try_option(
 
 fn main() {
     let (input_path, output_path) = try_print!(lib::shell_args());
-    let contents = try_print!(fs::readdir(&input_path));
+    let contents = try_print!(fs::read_dir(&input_path));
     let mut file_paths = Vec::new();
     let mut dir_paths = Vec::new();
     let mut template_option: Option<mustache::Template> = None;
 
     // TODO: pass base template as an argument
-    for absolute_path in contents.iter().filter(|p| p.extension_str() == Some("mustache")) {
+    for content_path in contents {
+        let absolute_path = match content_path {
+            Ok(dir_entry) => dir_entry.path(),
+            Err(_) => continue
+        };
+
+        if absolute_path.extension() != Some(OsStr::from_str("mustache")) {
+            continue
+        }
         if template_option.is_none() {
-            template_option = try_option!(mustache::compile_path(absolute_path.clone()));
+            template_option = try!(mustache::compile_path(absolute_path.clone()));
         } else {
             break;
         };
@@ -67,7 +77,12 @@ fn main() {
         Some(val) => val
     };
 
-    for absolute_path in contents.into_iter() {
+    for content_path in contents {
+        let absolute_path = match content_path {
+            Ok(dir_entry) => dir_entry.path(),
+            Err(_) => continue
+        };
+
         if absolute_path.is_dir() {
             try_print!(lib::output_mkdir(&absolute_path, &input_path, &output_path));
             dir_paths.push(absolute_path.clone());
@@ -82,7 +97,11 @@ fn main() {
             None => break,
         };
 
-        for absolute_path in try_print!(fs::readdir(&directory)).into_iter() {
+        for content_path in try_print!(fs::read_dir(&directory)).into_iter() {
+            let absolute_path = match content_path {
+                Ok(dir_entry) => dir_entry.path(),
+                Err(_) => continue
+            };
             if absolute_path.is_dir() {
                 try_print!(lib::output_mkdir(&absolute_path, &input_path, &output_path));
                 dir_paths.push(absolute_path.clone());
@@ -92,8 +111,12 @@ fn main() {
         };
     }
 
-    for absolute_path in file_paths.iter().filter(|p| p.extension_str() == Some("md")) {
-        let mut markdown_file = try_print!(io::File::open(absolute_path));
+    for content_path in file_paths.iter().filter(|p| p.extension_str() == Some("md")) {
+        let absolute_path = match content_path {
+            Ok(dir_entry) => dir_entry.path(),
+            Err(_) => continue
+        };
+        let mut markdown_file = try_print!(fs::File::open(absolute_path));
         let markdown_string = try_print!(markdown_file.read_to_string());
 
         let page = PageData {
@@ -106,7 +129,7 @@ fn main() {
         let mut relative_path_html = output_path.clone();
         relative_path_html.push(relative_path_md.with_extension("html").as_str().unwrap());
 
-        let mut output_file = io::File::create(&relative_path_html);
+        let mut output_file = fs::File::create(&relative_path_html);
         template.render(&mut output_file, &page);
     }
 }
@@ -114,8 +137,9 @@ fn main() {
 mod lib {
     use std::os;
     use std::io;
+    use std::old_io::{fs, IoResult, USER_DIR};
 
-    fn parse_path_opt(position: uint, default_value: &str) -> io::IoResult<Path> {
+    fn parse_path_opt(position: usize, default_value: &str) -> IoResult<Path> {
         let args = os::args();
         os::make_absolute(&if args.len() > position {
             Path::new(&args[position])
@@ -124,7 +148,7 @@ mod lib {
         })
     }
 
-    pub fn shell_args() -> io::IoResult<(Path, Path)> {
+    pub fn shell_args() -> IoResult<(Path, Path)> {
         let input_arg = parse_path_opt(1, "../input/");
         let output_arg = parse_path_opt(2, "../output/");
 
@@ -141,8 +165,8 @@ mod lib {
         output_target
     }
 
-    pub fn output_mkdir(input_target: &Path, input_path: &Path, output_path: &Path) -> io::IoResult<()> {
+    pub fn output_mkdir(input_target: &Path, input_path: &Path, output_path: &Path) -> IoResult<()> {
         let output_target = get_output_target(input_target, input_path, output_path);
-        io::fs::mkdir_recursive(&output_target, io::USER_DIR)
+        fs::mkdir_recursive(&output_target, USER_DIR)
     }
 }
