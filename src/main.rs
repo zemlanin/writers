@@ -1,5 +1,4 @@
 #![feature(io)]
-#![feature(os)]
 #![feature(env)]
 #![feature(path)]
 
@@ -45,7 +44,7 @@ macro_rules! try_option(
 );
 
 fn main() {
-    let (input_path, output_path) = try_print!(lib::shell_args());
+    let (input_path, output_path) = lib::shell_args();
     let contents = try_print!(fs::readdir(&input_path));
     let mut file_paths = Vec::new();
     let mut dir_paths = Vec::new();
@@ -99,7 +98,7 @@ fn main() {
 
         let page = PageData {
             posts: vec![PostData {
-                content: markdown::to_html(markdown_string.as_slice()),
+                content: markdown::to_html(&markdown_string[]),
             }],
         };
 
@@ -108,35 +107,31 @@ fn main() {
         relative_path_html.push(relative_path_md.with_extension("html").as_str().unwrap());
 
         let mut output_file = fs::File::create(&relative_path_html);
-        template.render(&mut output_file, &page);
+        template.render(&mut output_file, &page).unwrap();
     }
 }
 
 mod lib {
-    use std::os;
     use std::env;
     use std::old_io;
     use std::old_io::fs;
     use std::old_io::USER_DIR;
 
-    fn parse_path_opt(arg: Option<String>, default_value: &str) -> old_io::IoResult<Path> {
-        os::make_absolute(&match arg {
+    fn parse_path_opt(arg: Option<String>, default_value: &str) -> Path {
+        env::current_dir().unwrap().join(&match arg {
             Some(path) => Path::new(&path),
             _ => Path::new(default_value)
         })
     }
 
-    pub fn shell_args() -> old_io::IoResult<(Path, Path)> {
+    pub fn shell_args() -> (Path, Path) {
         let mut args = env::args();
         args.next();
 
-        let input_arg = parse_path_opt(args.next().clone(), "../input/");
-        let output_arg = parse_path_opt(args.next().clone(), "../output/");
+        let input_path = parse_path_opt(args.next().clone(), "../input/");
+        let output_path = parse_path_opt(args.next().clone(), "../output/");
 
-        match (input_arg, output_arg) {
-            (Ok(input_path), Ok(output_path)) => Ok((input_path, output_path)),
-            (Err(msg), _) | (_, Err(msg)) => Err(msg)
-        }
+        (input_path, output_path)
     }
 
     fn get_output_target(input_target: &Path, input_path: &Path, output_path: &Path) -> Path {
