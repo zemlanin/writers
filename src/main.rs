@@ -112,23 +112,24 @@ fn main() {
 
 mod lib {
     use std::os;
-    use std::io;
+    use std::env;
     use std::old_io;
     use std::old_io::fs;
     use std::old_io::USER_DIR;
 
-    fn parse_path_opt(position: usize, default_value: &str) -> old_io::IoResult<Path> {
-        let args = os::args();
-        os::make_absolute(&if args.len() > position {
-            Path::new(&args[position])
-        } else {
-            Path::new(default_value)
+    fn parse_path_opt(arg: Option<String>, default_value: &str) -> old_io::IoResult<Path> {
+        os::make_absolute(&match arg {
+            Some(path) => Path::new(&path),
+            _ => Path::new(default_value)
         })
     }
 
     pub fn shell_args() -> old_io::IoResult<(Path, Path)> {
-        let input_arg = parse_path_opt(1, "../input/");
-        let output_arg = parse_path_opt(2, "../output/");
+        let mut args = env::args();
+        args.next();
+
+        let input_arg = parse_path_opt(args.next().clone(), "../input/");
+        let output_arg = parse_path_opt(args.next().clone(), "../output/");
 
         match (input_arg, output_arg) {
             (Ok(input_path), Ok(output_path)) => Ok((input_path, output_path)),
