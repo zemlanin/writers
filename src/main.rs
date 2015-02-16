@@ -1,10 +1,12 @@
-#![feature(macro_rules)]
+#![feature(io)]
+#![feature(os)]
+#![feature(env)]
+#![feature(path)]
 
 extern crate mustache;
 extern crate markdown;
 extern crate "rustc-serialize" as rustc_serialize;
 
-use std::old_io;
 use std::old_io::fs;
 use std::old_io::fs::PathExtensions;
 
