@@ -44,7 +44,10 @@ macro_rules! try_option(
 );
 
 fn main() {
-    let (input_path, output_path) = lib::shell_args();
+    let (input_path, output_path) = match lib::shell_args() {
+        Some(val) => val,
+        _ => return
+    };
     let contents = try_print!(fs::readdir(&input_path));
     let mut file_paths = Vec::new();
     let mut dir_paths = Vec::new();
@@ -117,21 +120,26 @@ mod lib {
     use std::old_io::fs;
     use std::old_io::USER_DIR;
 
-    fn parse_path_opt(arg: Option<String>, default_value: &str) -> Path {
-        env::current_dir().unwrap().join(&match arg {
-            Some(path) => Path::new(&path),
-            _ => Path::new(default_value)
-        })
-    }
+    pub fn shell_args() -> Option<(Path, Path)> {
+        let args: Vec<String> = env::args()
+                                    .map(|x| x.to_string())
+                                    .collect();
+        let input_path: Path;
+        let output_path: Path;
 
-    pub fn shell_args() -> (Path, Path) {
-        let mut args = env::args();
-        args.next();
+        match &args[1..] {
+            [ref input_arg, ref output_arg] => {
+                let current_dir = env::current_dir().unwrap();
+                input_path = current_dir.join(input_arg);
+                output_path = current_dir.join(output_arg);
+                Some((input_path, output_path))
+            },
+            _ => {
+                println!("Usage: {} input_path output_path", args[0]);
+                None
+            },
+        }
 
-        let input_path = parse_path_opt(args.next().clone(), "../input/");
-        let output_path = parse_path_opt(args.next().clone(), "../output/");
-
-        (input_path, output_path)
     }
 
     fn get_output_target(input_target: &Path, input_path: &Path, output_path: &Path) -> Path {
