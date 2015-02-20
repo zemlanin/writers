@@ -1,8 +1,11 @@
 [package]
-
 name = "writers"
 version = "0.0.1"
 authors = ["Anton Verinov <git@zemlan.in>"]
+
+[[bin]]
+name = "writers"
+path = "src/main.rs"
 
 [dependencies.rust-mustache]
 git = "https://github.com/nickel-org/rust-mustache"

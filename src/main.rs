@@ -31,18 +31,6 @@ macro_rules! try_print(
     })
 );
 
-macro_rules! try_option(
-    ($expr:expr) => ({
-        match $expr {
-            Ok(val) => Some(val),
-            Err(err) => {
-                println!("{:?}", err);
-                None
-            }
-        }
-    })
-);
-
 fn main() {
     let (input_path, output_path) = match lib::shell_args() {
         Some(val) => val,
@@ -51,23 +39,10 @@ fn main() {
     let contents = try_print!(fs::readdir(&input_path));
     let mut file_paths = Vec::new();
     let mut dir_paths = Vec::new();
-    let mut template_option: Option<mustache::Template> = None;
 
-    // TODO: pass base template as an argument
-    for absolute_path in contents.iter().filter(|p| p.extension_str() == Some("mustache")) {
-        if template_option.is_none() {
-            template_option = try_option!(mustache::compile_path(absolute_path.clone()));
-        } else {
-            break;
-        };
-    }
-
-    let template = match template_option {
-        None => {
-            println!("No base mustache template in input folder");
-            return
-        },
-        Some(val) => val
+    let template = match lib::get_base_template(contents.clone()) {
+        Some(val) => val,
+        _ => return
     };
 
     for absolute_path in contents.into_iter() {
@@ -115,6 +90,8 @@ fn main() {
 }
 
 mod lib {
+    extern crate mustache;
+
     use std::env;
     use std::old_io;
     use std::old_io::fs;
@@ -152,5 +129,26 @@ mod lib {
     pub fn output_mkdir(input_target: &Path, input_path: &Path, output_path: &Path) -> old_io::IoResult<()> {
         let output_target = get_output_target(input_target, input_path, output_path);
         fs::mkdir_recursive(&output_target, USER_DIR)
+    }
+
+    pub fn get_base_template(input_contents: Vec<Path>) -> Option<mustache::Template> {
+        let templates_in_input: Vec<Path> = input_contents
+                                    .into_iter()
+                                    .filter(|p| p.extension_str() == Some("mustache"))
+                                    .collect();
+
+        match &templates_in_input[..] {
+            [ref template_path] => match mustache::compile_path(template_path.clone()) {
+                Ok(result) => Some(result),
+                Err(err) => {
+                    println!("{:?}", err);
+                    None
+                }
+            },
+            _ => {
+                print!("single .mustache file in input path is required");
+                None
+            }
+        }
     }
 }
