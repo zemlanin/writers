@@ -1,6 +1,6 @@
-#![feature(io)]
+#![feature(old_io)]
 #![feature(env)]
-#![feature(path)]
+#![feature(old_path)]
 
 extern crate mustache;
 extern crate markdown;
