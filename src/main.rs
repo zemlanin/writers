@@ -98,7 +98,7 @@ fn main() {
 
         let page = PageData {
             posts: vec![PostData {
-                content: markdown::to_html(&markdown_string[]),
+                content: markdown::to_html(&markdown_string[..]),
             }],
         };
 
