@@ -45,10 +45,7 @@ fn main() {
         Some(val) => val,
         _ => return
     };
-    let template = match lib::get_base_template(&input_path) {
-        Some(val) => val,
-        _ => return
-    };
+    let template = try_print!(lib::get_base_template(&input_path));
 
     let mut file_paths = Vec::new();
     let mut dir_paths = Vec::new();
@@ -154,27 +151,14 @@ mod lib {
         fs::create_dir_all(&output_target)
     }
 
-    pub fn get_base_template(input_path: &PathBuf) -> Option<mustache::Template> {
+    pub fn get_base_template(input_path: &PathBuf) -> Result<mustache::Template, io::Error> {
         let mut template_path = input_path.clone();
         template_path.push("base.mustache");
 
-        let mut f = match File::open(template_path.as_os_str()) {
-            Ok(result) => result,
-            Err(err) => {
-                println!("{:?}", err);
-                return None
-            }
-        };
-
+        let mut f = try!(File::open(template_path.as_os_str()));
         let mut s = String::new();
-        match f.read_to_string(&mut s) {
-            Err(err) => {
-                println!("{:?}", err);
-                return None
-            },
-            _ => {}
-        };
+        try!(f.read_to_string(&mut s));
 
-        Some(mustache::compile_str(&s))
+        Ok(mustache::compile_str(&s))
     }
 }
