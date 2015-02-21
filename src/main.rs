@@ -1,17 +1,18 @@
-#![feature(old_io)]
-#![feature(old_path)]
-
 #![feature(io)]
 #![feature(fs)]
 #![feature(env)]
 #![feature(std_misc)]
 
+extern crate core;
 extern crate mustache;
 extern crate markdown;
 extern crate "rustc-serialize" as rustc_serialize;
 
-use std::old_io::fs;
-use std::old_io::fs::PathExtensions;
+use std::fs;
+use std::path::{Path, PathBuf};
+use core::ops::Deref;
+use std::ffi::OsStr;
+use std::io::prelude::*;
 
 #[derive(RustcEncodable)]
 struct PostData {
@@ -40,21 +41,23 @@ fn main() {
         Some(val) => val,
         _ => return
     };
-    let contents = try_print!(fs::readdir(&input_path));
-    let mut file_paths = Vec::new();
-    let mut dir_paths = Vec::new();
-
-    let template = match lib::get_base_template(contents.clone()) {
+    let template = match lib::get_base_template(&input_path) {
         Some(val) => val,
         _ => return
     };
 
-    for absolute_path in contents.into_iter() {
+    let mut file_paths = Vec::new();
+    let mut dir_paths = Vec::new();
+
+    for absolute_entry in try_print!(fs::read_dir(&input_path)) {
+        let absolute_entry = try_print!(absolute_entry);
+        let absolute_path = absolute_entry.path().deref();
+
         if absolute_path.is_dir() {
             try_print!(lib::output_mkdir(&absolute_path, &input_path, &output_path));
-            dir_paths.push(absolute_path.clone());
+            dir_paths.push(absolute_path);
         } else {
-            file_paths.push(absolute_path.clone());
+            file_paths.push(absolute_path);
         };
     };
 
@@ -64,19 +67,25 @@ fn main() {
             None => break,
         };
 
-        for absolute_path in try_print!(fs::readdir(&directory)).into_iter() {
+        for absolute_entry in try_print!(fs::read_dir(directory)) {
+            let absolute_entry = try_print!(absolute_entry);
+            let absolute_path = absolute_entry.path().deref();
+
             if absolute_path.is_dir() {
                 try_print!(lib::output_mkdir(&absolute_path, &input_path, &output_path));
-                dir_paths.push(absolute_path.clone());
+                dir_paths.push(absolute_path);
             } else {
-                file_paths.push(absolute_path.clone());
+                file_paths.push(absolute_path);
             };
         };
     }
 
-    for absolute_path in file_paths.iter().filter(|p| p.extension_str() == Some("md")) {
+    for absolute_path in file_paths
+                            .into_iter()
+                            .filter(|p| p.extension() == Some(OsStr::from_str("md"))) {
         let mut markdown_file = try_print!(fs::File::open(absolute_path));
-        let markdown_string = try_print!(markdown_file.read_to_string());
+        let mut markdown_string = String::new();
+        try_print!(markdown_file.read_to_string(&mut markdown_string));
 
         let page = PageData {
             posts: vec![PostData {
@@ -84,39 +93,44 @@ fn main() {
             }],
         };
 
-        let relative_path_md = absolute_path.path_relative_from(&input_path).unwrap();
+        let relative_path_md = absolute_path.relative_from(&input_path).unwrap();
         let mut relative_path_html = output_path.clone();
-        relative_path_html.push(relative_path_md.with_extension("html").as_str().unwrap());
+        relative_path_html.push(
+            &relative_path_md.with_extension("html").into_os_string()
+        );
 
-        let mut output_file = fs::File::create(&relative_path_html);
-        template.render(&mut output_file, &page).unwrap();
+        let mut bytes = vec![];
+        template.render(&mut bytes, &page);
+
+        let mut output_file = try_print!(fs::File::create(&relative_path_html));
+        output_file.write(&bytes);
     }
 }
 
 mod lib {
     extern crate mustache;
 
-    use std::old_io;
-    use std::old_io::fs;
-    use std::old_io::USER_DIR;
-
+    use std::io;
+    use std::os;
     use std::env;
+    use std::fs;
     use std::fs::File;
     use std::ffi::AsOsStr;
     use std::io::prelude::*;
+    use std::path;
 
-    pub fn shell_args() -> Option<(Path, Path)> {
+    pub fn shell_args() -> Option<(path::PathBuf, path::PathBuf)> {
         let args: Vec<String> = env::args()
                                     .map(|x| x.to_string())
                                     .collect();
-        let input_path: Path;
-        let output_path: Path;
+        let input_path: path::PathBuf;
+        let output_path: path::PathBuf;
 
         match &args[1..] {
             [ref input_arg, ref output_arg] => {
-                let current_dir = env::current_dir().unwrap();
-                input_path = current_dir.join(input_arg);
-                output_path = current_dir.join(output_arg);
+                //let current_dir = os::getcwd().unwrap();
+                input_path = path::PathBuf::new(input_arg);
+                output_path = path::PathBuf::new(output_arg);
                 Some((input_path, output_path))
             },
             _ => {
@@ -126,48 +140,39 @@ mod lib {
         }
     }
 
-    fn get_output_target(input_target: &Path, input_path: &Path, output_path: &Path) -> Path {
-        let relative_path = input_target.path_relative_from(input_path).unwrap();
+    fn get_output_target(input_target: &path::Path, input_path: &path::PathBuf, output_path: &path::PathBuf) -> path::PathBuf {
+        let relative_path = input_target.relative_from(input_path).unwrap();
         let mut output_target = output_path.clone();
-        output_target.push(relative_path.as_str().unwrap());
+        output_target.push(relative_path);
         output_target
     }
 
-    pub fn output_mkdir(input_target: &Path, input_path: &Path, output_path: &Path) -> old_io::IoResult<()> {
+    pub fn output_mkdir(input_target: &path::Path, input_path: &path::PathBuf, output_path: &path::PathBuf) -> io::Result<()> {
         let output_target = get_output_target(input_target, input_path, output_path);
-        fs::mkdir_recursive(&output_target, USER_DIR)
+        fs::create_dir_all(&output_target)
     }
 
-    pub fn get_base_template(input_contents: Vec<Path>) -> Option<mustache::Template> {
-        let templates_in_input: Vec<Path> = input_contents
-                                    .into_iter()
-                                    .filter(|p| p.extension_str() == Some("mustache"))
-                                    .collect();
+    pub fn get_base_template(input_path: &path::PathBuf) -> Option<mustache::Template> {
+        let mut template_path = input_path.clone();
+        template_path.push("base.mustache");
 
-        match &templates_in_input[..] {
-            [ref template_path] => {
-                let mut f = match File::open(template_path.clone().as_os_str()) {
-                    Ok(result) => result,
-                    Err(err) => {
-                        println!("{:?}", err);
-                        return None
-                    }
-                };
-                let mut s = String::new();
-                match f.read_to_string(&mut s) {
-                    Err(err) => {
-                        println!("{:?}", err);
-                        return None
-                    },
-                    _ => {}
-                };
-
-                Some(mustache::compile_str(&s))
-            },
-            _ => {
-                print!("single .mustache file in input path is required");
-                None
+        let mut f = match File::open(template_path.as_os_str()) {
+            Ok(result) => result,
+            Err(err) => {
+                println!("{:?}", err);
+                return None
             }
-        }
+        };
+
+        let mut s = String::new();
+        match f.read_to_string(&mut s) {
+            Err(err) => {
+                println!("{:?}", err);
+                return None
+            },
+            _ => {}
+        };
+
+        Some(mustache::compile_str(&s))
     }
 }
