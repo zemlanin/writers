@@ -14,6 +14,8 @@ use core::ops::Deref;
 use std::ffi::OsStr;
 use std::io::prelude::*;
 
+use std::borrow::ToOwned;
+
 #[derive(RustcEncodable)]
 struct PostData {
     content: String,
@@ -51,7 +53,7 @@ fn main() {
 
     for absolute_entry in try_print!(fs::read_dir(&input_path)) {
         let absolute_entry = try_print!(absolute_entry);
-        let absolute_path = absolute_entry.path().deref();
+        let absolute_path = absolute_entry.path().deref().to_owned();
 
         if absolute_path.is_dir() {
             try_print!(lib::output_mkdir(&absolute_path, &input_path, &output_path));
@@ -67,9 +69,9 @@ fn main() {
             None => break,
         };
 
-        for absolute_entry in try_print!(fs::read_dir(directory)) {
+        for absolute_entry in try_print!(fs::read_dir(&directory)) {
             let absolute_entry = try_print!(absolute_entry);
-            let absolute_path = absolute_entry.path().deref();
+            let absolute_path = absolute_entry.path().deref().to_owned();
 
             if absolute_path.is_dir() {
                 try_print!(lib::output_mkdir(&absolute_path, &input_path, &output_path));
@@ -83,7 +85,7 @@ fn main() {
     for absolute_path in file_paths
                             .into_iter()
                             .filter(|p| p.extension() == Some(OsStr::from_str("md"))) {
-        let mut markdown_file = try_print!(fs::File::open(absolute_path));
+        let mut markdown_file = try_print!(fs::File::open(&absolute_path));
         let mut markdown_string = String::new();
         try_print!(markdown_file.read_to_string(&mut markdown_string));
 
