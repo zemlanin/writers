@@ -1,6 +1,10 @@
 #![feature(old_io)]
-#![feature(env)]
 #![feature(old_path)]
+
+#![feature(io)]
+#![feature(fs)]
+#![feature(env)]
+#![feature(std_misc)]
 
 extern crate mustache;
 extern crate markdown;
@@ -92,10 +96,14 @@ fn main() {
 mod lib {
     extern crate mustache;
 
-    use std::env;
     use std::old_io;
     use std::old_io::fs;
     use std::old_io::USER_DIR;
+
+    use std::env;
+    use std::fs::File;
+    use std::ffi::AsOsStr;
+    use std::io::prelude::*;
 
     pub fn shell_args() -> Option<(Path, Path)> {
         let args: Vec<String> = env::args()
@@ -116,7 +124,6 @@ mod lib {
                 None
             },
         }
-
     }
 
     fn get_output_target(input_target: &Path, input_path: &Path, output_path: &Path) -> Path {
@@ -138,12 +145,24 @@ mod lib {
                                     .collect();
 
         match &templates_in_input[..] {
-            [ref template_path] => match mustache::compile_path(template_path.clone()) {
-                Ok(result) => Some(result),
-                Err(err) => {
-                    println!("{:?}", err);
-                    None
-                }
+            [ref template_path] => {
+                let mut f = match File::open(template_path.clone().as_os_str()) {
+                    Ok(result) => result,
+                    Err(err) => {
+                        println!("{:?}", err);
+                        return None
+                    }
+                };
+                let mut s = String::new();
+                match f.read_to_string(&mut s) {
+                    Err(err) => {
+                        println!("{:?}", err);
+                        return None
+                    },
+                    _ => {}
+                };
+
+                Some(mustache::compile_str(&s))
             },
             _ => {
                 print!("single .mustache file in input path is required");
