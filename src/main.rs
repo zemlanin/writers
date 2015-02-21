@@ -1,6 +1,9 @@
 #![feature(io)]
 #![feature(fs)]
+#![feature(os)]
 #![feature(env)]
+#![feature(core)]
+#![feature(path)]
 #![feature(std_misc)]
 
 extern crate core;
@@ -9,7 +12,6 @@ extern crate markdown;
 extern crate "rustc-serialize" as rustc_serialize;
 
 use std::fs;
-use std::path::{Path, PathBuf};
 use core::ops::Deref;
 use std::ffi::OsStr;
 use std::io::prelude::*;
@@ -102,10 +104,10 @@ fn main() {
         );
 
         let mut bytes = vec![];
-        template.render(&mut bytes, &page);
+        try_print!(template.render(&mut bytes, &page));
 
         let mut output_file = try_print!(fs::File::create(&relative_path_html));
-        output_file.write(&bytes);
+        try_print!(output_file.write(&bytes));
     }
 }
 
@@ -113,26 +115,24 @@ mod lib {
     extern crate mustache;
 
     use std::io;
-    use std::os;
     use std::env;
     use std::fs;
     use std::fs::File;
     use std::ffi::AsOsStr;
     use std::io::prelude::*;
-    use std::path;
+    use std::path::{Path, PathBuf};
 
-    pub fn shell_args() -> Option<(path::PathBuf, path::PathBuf)> {
+    pub fn shell_args() -> Option<(PathBuf, PathBuf)> {
         let args: Vec<String> = env::args()
                                     .map(|x| x.to_string())
                                     .collect();
-        let input_path: path::PathBuf;
-        let output_path: path::PathBuf;
+        let input_path: PathBuf;
+        let output_path: PathBuf;
 
         match &args[1..] {
             [ref input_arg, ref output_arg] => {
-                //let current_dir = os::getcwd().unwrap();
-                input_path = path::PathBuf::new(input_arg);
-                output_path = path::PathBuf::new(output_arg);
+                input_path = PathBuf::new(input_arg);
+                output_path = PathBuf::new(output_arg);
                 Some((input_path, output_path))
             },
             _ => {
@@ -142,19 +142,19 @@ mod lib {
         }
     }
 
-    fn get_output_target(input_target: &path::Path, input_path: &path::PathBuf, output_path: &path::PathBuf) -> path::PathBuf {
+    fn get_output_target(input_target: &Path, input_path: &PathBuf, output_path: &PathBuf) -> PathBuf {
         let relative_path = input_target.relative_from(input_path).unwrap();
         let mut output_target = output_path.clone();
         output_target.push(relative_path);
         output_target
     }
 
-    pub fn output_mkdir(input_target: &path::Path, input_path: &path::PathBuf, output_path: &path::PathBuf) -> io::Result<()> {
+    pub fn output_mkdir(input_target: &Path, input_path: &PathBuf, output_path: &PathBuf) -> io::Result<()> {
         let output_target = get_output_target(input_target, input_path, output_path);
         fs::create_dir_all(&output_target)
     }
 
-    pub fn get_base_template(input_path: &path::PathBuf) -> Option<mustache::Template> {
+    pub fn get_base_template(input_path: &PathBuf) -> Option<mustache::Template> {
         let mut template_path = input_path.clone();
         template_path.push("base.mustache");
 
