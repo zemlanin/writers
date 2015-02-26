@@ -14,4 +14,4 @@ git = "https://github.com/nickel-org/rust-mustache"
 git = "https://github.com/johannhof/markdown.rs.git"
 
 [dependencies]
-rustc-serialize = "0.2.12"
+rustc-serialize = "*"
