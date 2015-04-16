@@ -1,15 +1,13 @@
-#![feature(io)]
-#![feature(fs)]
-#![feature(os)]
-#![feature(env)]
 #![feature(core)]
-#![feature(path)]
 #![feature(std_misc)]
+#![feature(path_ext)]
+#![feature(slice_patterns)]
+#![feature(path_relative_from)]
 
 extern crate core;
 extern crate mustache;
-extern crate markdown;
-extern crate "rustc-serialize" as rustc_serialize;
+// extern crate markdown;
+extern crate rustc_serialize;
 
 use std::fs;
 use core::ops::Deref;
@@ -83,14 +81,15 @@ fn main() {
 
     for absolute_path in file_paths
                             .into_iter()
-                            .filter(|p| p.extension() == Some(OsStr::from_str("md"))) {
+                            .filter(|p| p.extension() == Some(OsStr::new("md"))) {
         let mut markdown_file = try_print!(fs::File::open(&absolute_path));
         let mut markdown_string = String::new();
         try_print!(markdown_file.read_to_string(&mut markdown_string));
 
         let page = PageData {
             posts: vec![PostData {
-                content: markdown::to_html(&markdown_string[..]),
+                // content: markdown::to_html(&markdown_string[..]),
+                content: markdown_string,
             }],
         };
 
@@ -128,8 +127,8 @@ mod lib {
 
         match &args[1..] {
             [ref input_arg, ref output_arg] => {
-                input_path = PathBuf::new(input_arg);
-                output_path = PathBuf::new(output_arg);
+                input_path = PathBuf::from(input_arg);
+                output_path = PathBuf::from(output_arg);
                 Some((input_path, output_path))
             },
             _ => {
